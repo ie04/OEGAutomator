@@ -8,6 +8,13 @@ except Exception:
     except Exception:
         pass
 
+try:
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+        "FullSail.OEGAutomator"
+    )
+except Exception:
+    pass
+
 import tkinter as tk
 from pathlib import Path
 
@@ -60,6 +67,7 @@ class AutomatorUI(tk.Tk):
         self.BASE_DIR = Path(__file__).resolve().parent
         self.ASSETS = self.BASE_DIR / "icons"
 
+        self._set_app_icon()
         self.icons = {}
         self._load_icons()
 
@@ -82,6 +90,19 @@ class AutomatorUI(tk.Tk):
 
         self.show_page("MainPage")
         self.after(100, self._poll_runner)
+
+    def _set_app_icon(self):
+        if self.tk.call("tk", "windowingsystem") != "win32":
+            return
+
+        ico_icon_path = self.ASSETS / "fullsail-logo.ico"
+        if not ico_icon_path.exists():
+            return
+
+        try:
+            self.iconbitmap(default=str(ico_icon_path))
+        except Exception:
+            pass
 
     def _load_icons(self):
         icon_size = (64, 64)
