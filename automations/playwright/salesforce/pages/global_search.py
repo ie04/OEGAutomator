@@ -21,28 +21,34 @@ class GlobalSearch:
     async def search(self, query: str) -> bool:
         page = self.page
 
-        
-        await page.wait_for_load_state("domcontentloaded")
+        await page.wait_for_load_state(state="load")
+
 
         tabs = page.get_by_role("button", name="Close Tab")
 
+        if await tabs.first.is_visible(timeout=10000):
+            count = await tabs.count()
+        else:
+            count = 0
 
-        count = await tabs.count()
         for i in range(count):
             await tabs.nth(0).click()
 
 
         # 2) Find the global Search button safely
         search_btn = page.get_by_role("button", name="Search").first
-        
-        await search_btn.wait_for(state="attached")
-        await search_btn.dblclick()
-
-        # 3) Interact with the search box, with robust waiting
         sb = page.get_by_role("searchbox", name="Search...")
-        await sb.wait_for(state="attached")
+
+        await search_btn.wait_for(state="visible", timeout=3000)
+        await search_btn.dblclick()
+        await page.wait_for_timeout(3000)
+
+        await sb.wait_for(state="attached", timeout=3000)
         await sb.fill(query)
         await sb.press("Enter")
+                
+
+        
 
         # 4) Wait for Contacts section to show results
         section = contacts_section(page)
@@ -53,11 +59,11 @@ class GlobalSearch:
 
         links = section.locator(CONTACT_LINKS)
 
-        if await links.count() == 0:
-            return False
+        if await links.first.is_visible(timeout=3000):
+            if await links.count() == 0:
+                return False
 
-        first_link = links.first
-        await first_link.scroll_into_view_if_needed()
-        await first_link.click()
+        await links.first.scroll_into_view_if_needed()
+        await links.first.click()
 
         return True

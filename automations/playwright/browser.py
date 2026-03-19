@@ -40,6 +40,7 @@ class BrowserSession:
             user_data_dir=self.user_data_dir,
             channel=self.channel,
             headless=self.headless,
+            slow_mo=500
         )
         self.context.on("close", lambda: self._handle_context_closed())
 
