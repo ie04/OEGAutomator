@@ -35,6 +35,7 @@ from application.services.generate_tution_breakdown_service import (
 )
 from .pages.main_page import MainPage
 from .pages.generate_tb_page import GenerateTBPage
+from .pages.tb_output_page import TBOutputPage
 from .pages.load_student_by_id_page import LoadStudentByIDPage
 from .pages.send_email_page import SendEmailPage
 
@@ -81,6 +82,7 @@ class AutomatorUI(tk.Tk):
         self.container.grid_columnconfigure(0, weight=1)
 
         self.frames = {}
+        self._tb_output_windows: list[TBOutputPage] = []
 
         for Page in (MainPage, LoadStudentByIDPage, SendEmailPage, GenerateTBPage):
             page_name = Page.__name__
@@ -244,6 +246,19 @@ class AutomatorUI(tk.Tk):
             file=file,
             outdir=outdir,
         )
+
+    def show_tb_output(self, output_text: str) -> None:
+        output_window = TBOutputPage(self, output_text=output_text)
+        self._tb_output_windows.append(output_window)
+
+        def _cleanup():
+            try:
+                self._tb_output_windows.remove(output_window)
+            except ValueError:
+                pass
+            output_window.destroy()
+
+        output_window.protocol("WM_DELETE_WINDOW", _cleanup)
 
     def _poll_runner(self):
         while True:

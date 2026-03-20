@@ -229,6 +229,69 @@ def choose_breakdown_sheet(
     return default_sheet
 
 
+def get_breakdown_output_text(
+    ws_breakdown,
+    sheet_name: str,
+    program_code: str,
+    dep_ind: str,
+    ind_override: Optional[str] = None,
+    completer_program_code: Optional[str] = None,
+) -> str:
+    def cell_text(cell_ref: str) -> str:
+        return norm_str(ws_breakdown.Range(cell_ref).Text)
+
+    if dep_ind == "IND":
+        ind_flag = "IND Y"
+    elif ind_override is not None:
+        ind_flag = f"IND N ({ind_override})"
+    else:
+        ind_flag = "IND N"
+
+    sd_prog = program_code
+    if completer_program_code is not None and sheet_name == "4 ACYR Breakdown":
+        sd_prog = f"{program_code}/{completer_program_code}"
+
+    if sheet_name == "4 ACYR Breakdown":
+        lines = [
+            "FA Breakdown",
+            f"Ovl Bal: {cell_text('H55')} {ind_flag}",
+            f"SD/Prog: {sd_prog}",
+            f"1st Year Total Tuition: {cell_text('H6')}",
+            f"1st AC YR Bal: {cell_text('H24')}",
+            f"2nd AC YR Bal: {cell_text('H42')}",
+            f"3rd AC YR Bal: {cell_text('E53')}",
+            f"4th AC YR Bal: {cell_text('H53')}",
+            "CA STRF: 0",
+            f"Pell: {cell_text('H10')}",
+            f"Comb Staff: {cell_text('H16')}",
+            f"TAS/OMS: {cell_text('H22')}",
+            "VA: 0",
+            "MTA: 0",
+            "Gap Funding:",
+        ]
+        return "\n".join(lines)
+
+    if sheet_name == "2 ACYR Breakdown":
+        lines = [
+            "FA Breakdown",
+            f"Ovl Bal: {cell_text('H45')} {ind_flag}",
+            f"SD/Prog: {sd_prog}",
+            f"1st Year Total Tuition: {cell_text('H6')}",
+            f"1st AC YR Bal: {cell_text('H24')}",
+            f"2nd AC YR Bal: {cell_text('H43')}",
+            "CA STRF: 0",
+            f"Pell: {cell_text('H10')}",
+            f"Comb Staff: {cell_text('H16')}",
+            f"TAS/OMS: {cell_text('H22')}",
+            "VA: 0",
+            "MTA: 0",
+            "Gap Funding:",
+        ]
+        return "\n".join(lines)
+
+    raise ValueError(f"Unsupported breakdown sheet for output text: '{sheet_name}'")
+
+
 def fill_program_stafford_selection_excel(
     wb,
     start_date: dt.date,
@@ -346,7 +409,7 @@ def fill_save_and_optionally_export_pdf(
     pell_used: Optional[float],
     sheet_name: str,
     do_pdf: bool,
-) -> Tuple[str, str]:
+) -> Tuple[str, str, str, Optional[str]]:
     import win32com.client  # type: ignore
 
     xl_calculation_automatic = -4105
@@ -389,6 +452,8 @@ def fill_save_and_optionally_export_pdf(
             wait_for_excel_calculation(excel)
             time.sleep(0.5)
 
+            output_text = ""
+            selected_sheet_name = None
             if do_pdf:
                 selected_sheet_name = choose_breakdown_sheet(
                     d4_val,
@@ -407,6 +472,15 @@ def fill_save_and_optionally_export_pdf(
                 wait_for_excel_calculation(excel)
                 time.sleep(0.5)
 
+                output_text = get_breakdown_output_text(
+                    ws,
+                    selected_sheet_name,
+                    program_code,
+                    dep_ind,
+                    ind_override=ind_override,
+                    completer_program_code=completer_program_code,
+                )
+
                 ws.ExportAsFixedFormat(
                     Type=xl_type_pdf,
                     Filename=str(out_pdf),
@@ -423,7 +497,7 @@ def fill_save_and_optionally_export_pdf(
                         f"Excel export completed, but the PDF was not found at: {out_pdf}"
                     )
 
-            return c4_val, d4_val
+            return c4_val, d4_val, output_text, selected_sheet_name
 
         finally:
             wb.Close(SaveChanges=False)
@@ -521,7 +595,7 @@ def main() -> int:
         return 2
 
     try:
-        c4_val, d4_val = fill_save_and_optionally_export_pdf(
+        c4_val, d4_val, output_text, selected_sheet_name = fill_save_and_optionally_export_pdf(
             template_path=template_path,
             out_pdf=out_pdf,
             start_date=args.start_date,
@@ -604,6 +678,9 @@ def main() -> int:
         f"  PDF Sheet:       "
         f"{choose_breakdown_sheet(d4_val, args.sheet, args.completer_program_code)}"
     )
+    if output_text:
+        print("FA Breakdown Output:")
+        print(output_text)
 
     if not args.no_pdf:
         print("PDF exported:")

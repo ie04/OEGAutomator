@@ -19,6 +19,7 @@ class TuitionBreakdownResult:
     c4_value: str
     d4_value: str
     pdf_sheet_name: str | None
+    output_text: str
 
 
 class GenerateTutionBreakdownService:
@@ -154,7 +155,8 @@ class GenerateTutionBreakdownService:
         )
         out_pdf = outdir_path / pdf_filename
 
-        c4_value, d4_value = tbgen.fill_save_and_optionally_export_pdf(
+        c4_value, d4_value, output_text, selected_sheet_name = (
+            tbgen.fill_save_and_optionally_export_pdf(
             template_path=template_path,
             out_pdf=out_pdf,
             start_date=parsed_start_date,
@@ -172,9 +174,10 @@ class GenerateTutionBreakdownService:
             pell_used=parsed_pell_used,
             sheet_name="4 ACYR Breakdown",
             do_pdf=True,
+            )
         )
 
-        pdf_sheet_name = tbgen.choose_breakdown_sheet(
+        pdf_sheet_name = selected_sheet_name or tbgen.choose_breakdown_sheet(
             d4_value,
             "4 ACYR Breakdown",
             completer_program_code=normalized_completer_program_code,
@@ -189,6 +192,7 @@ class GenerateTutionBreakdownService:
             c4_value=c4_value,
             d4_value=d4_value,
             pdf_sheet_name=pdf_sheet_name,
+            output_text=output_text,
         )
 
     @staticmethod

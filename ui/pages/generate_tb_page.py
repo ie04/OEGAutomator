@@ -498,6 +498,9 @@ class GenerateTBPage(tk.Frame):
             messagebox.showerror("Generate Tuition Breakdown Failed", str(error))
             return
 
+        if result.output_text:
+            self.controller.show_tb_output(result.output_text)
+
         if self._success_callback is not None and self._success_callback(result):
             return
 
