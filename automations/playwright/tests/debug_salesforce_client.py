@@ -33,25 +33,63 @@ def load_salesforce_client_class():
     return client_module.SalesforceClient
 
 
-def load_experiment_module():
+def load_nslds_client_class():
+    auth_module = importlib.import_module(
+        "automations.playwright.nslds.pages.auth"
+    )
+    pull_module = importlib.import_module(
+        "automations.playwright.nslds.pages.pull_up_student"
+    )
+    aid_module = importlib.import_module(
+        "automations.playwright.nslds.pages.aid_page"
+    )
+    enrollment_module = importlib.import_module(
+        "automations.playwright.nslds.pages.enrollment_page"
+    )
+    client_module = importlib.import_module(
+        "automations.playwright.nslds.nslds_client"
+    )
+
+    importlib.reload(auth_module)
+    importlib.reload(pull_module)
+    importlib.reload(aid_module)
+    importlib.reload(enrollment_module)
+    client_module = importlib.reload(client_module)
+
+    return client_module.NSLDSClient
+
+
+def load_experiment_module(experiment_name: str):
     module = importlib.import_module(
-        "automations.playwright.tests.salesforce_experiment"
+        f"automations.playwright.tests.{experiment_name}_experiment"
     )
     return importlib.reload(module)
 
 
-async def run_current_experiment(session: BrowserSession, student_id: str) -> None:
+async def run_current_experiment(
+    session: BrowserSession,
+    student_id: str,
+    experiment_name: str,
+) -> None:
     settings = get_settings()
     SalesforceClient = load_salesforce_client_class()
-    client = SalesforceClient(settings.salesforce, session)
-    experiment_module = load_experiment_module()
-    result = await experiment_module.run(client=client, session=session, student_id=student_id)
+    NSLDSClient = load_nslds_client_class()
+    clients = {
+        "salesforce": SalesforceClient(settings.salesforce, session),
+        "nslds": NSLDSClient(settings.nslds, session),
+    }
+    experiment_module = load_experiment_module(experiment_name)
+    result = await experiment_module.run(
+        clients=clients,
+        session=session,
+        student_id=student_id,
+    )
     if result is not None:
         print("\nResult:")
         print(result)
 
 
-async def main(student_id: str) -> None:
+async def main(experiment_name: str, student_id: str) -> None:
     settings = get_settings()
 
     session = BrowserSession(
@@ -64,25 +102,39 @@ async def main(student_id: str) -> None:
     try:
         page = await session.get_page()
         current_student_id = student_id
+        current_experiment = experiment_name
 
         while True:
-            print(f"\nRunning SalesforceClient with student ID: {current_student_id}")
+            print(
+                f"\nRunning {current_experiment} experiment with student ID: "
+                f"{current_student_id}"
+            )
 
             try:
-                await run_current_experiment(session, current_student_id)
+                await run_current_experiment(
+                    session=session,
+                    student_id=current_student_id,
+                    experiment_name=current_experiment,
+                )
             except Exception as exc:
                 print(f"\nRun failed: {exc}")
 
-            print("\nPlaywright Inspector is opening on the current Salesforce page.")
+            print("\nPlaywright Inspector is opening on the current page.")
             print("Resume it when you're ready to rerun your updated code.\n")
             await page.pause()
 
             next_action = input(
-                "Press Enter to rerun, type a new student ID, or type 'q' to quit: "
+                "Press Enter to rerun, type a new student ID, type "
+                "'salesforce' or 'nslds' to switch experiments, or type 'q' to quit: "
             ).strip()
 
             if next_action.lower() in {"q", "quit", "exit"}:
                 break
+
+            if next_action.lower() in {"salesforce", "nslds"}:
+                current_experiment = next_action.lower()
+                continue
+
             if next_action:
                 current_student_id = next_action
     finally:
@@ -90,9 +142,18 @@ async def main(student_id: str) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2 or not sys.argv[1].strip():
+    args = [arg.strip() for arg in sys.argv[1:]]
+
+    if len(args) == 1 and args[0]:
+        experiment_name = "salesforce"
+        student_id = args[0]
+    elif len(args) == 2 and args[0].lower() in {"salesforce", "nslds"} and args[1]:
+        experiment_name = args[0].lower()
+        student_id = args[1]
+    else:
         raise SystemExit(
-            "Usage: python automations/playwright/tests/debug_salesforce_client.py <student_id>"
+            "Usage: python automations/playwright/tests/debug_salesforce_client.py "
+            "[salesforce|nslds] <student_id>"
         )
 
-    asyncio.run(main(sys.argv[1].strip()))
+    asyncio.run(main(experiment_name, student_id))

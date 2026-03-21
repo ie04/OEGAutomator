@@ -1,5 +1,5 @@
 # pages/global_search.py
-from playwright.async_api import Page, TimeoutError
+from playwright.async_api import Page, TimeoutError, expect
 from .selectors import CONTACTS_SECTION, CONTACT_LINKS
 
 
@@ -21,50 +21,46 @@ class GlobalSearch:
     async def search(self, query: str) -> bool:
         page = self.page
 
-        load_element = page.get_by_role("tab", name="Details")
+        tablist = page.get_by_label("Workspace tabs for Student")
+        await expect(tablist).to_be_visible()
 
-        try:
-            await load_element.first.wait_for(state="visible", timeout=3000)
-        except Exception:
-            pass
-
-        tabs = page.get_by_role("button", name="Close Tab")
-
-        if await tabs.first.is_visible(timeout=10000):
-            count = await tabs.count()
-        else:
-            count = 0
-
+        tabs = tablist.get_by_role("button").filter(has_text="Close")
+        count = await tabs.count()
         for i in range(count):
             await tabs.nth(0).click()
 
 
         # 2) Find the global Search button safely
-        search_btn = page.get_by_role("button", name="Search").first
+        search_btn = page.get_by_role("button", name="Search", exact=True)
+        
+
+        await expect(search_btn).to_be_visible()
+        await expect(search_btn).to_be_enabled()
+        await search_btn.scroll_into_view_if_needed()
+        await search_btn.hover()
+        await search_btn.click()
+        
+        dialog = page.get_by_role("dialog", name="Search...")
+        await expect(dialog).to_be_visible()
+
         sb = page.get_by_role("searchbox", name="Search...")
-
-        await search_btn.wait_for(state="visible", timeout=3000)
-        await search_btn.dblclick()
-
-        await sb.wait_for(state="attached", timeout=3000)
+        await expect(sb).to_be_visible()
         await sb.fill(query)
         await sb.press("Enter")
                 
 
         
+        rows = page.locator("tr")
+        count = await rows.count()
 
         # 4) Wait for Contacts section to show results
-        section = contacts_section(page)
-        try:
-            await section.wait_for(state="visible", timeout=5000)
-        except TimeoutError:
-            return False
+        section = page.locator(CONTACTS_SECTION)
+        await expect(section).to_be_visible()
 
         links = section.locator(CONTACT_LINKS)
-
-        if await links.first.is_visible(timeout=3000):
-            if await links.count() == 0:
-                return False
+        await expect(links.first).to_be_visible(timeout=30000)
+        if await links.count() == 0:
+            return False
 
         await links.first.scroll_into_view_if_needed()
         await links.first.click()
