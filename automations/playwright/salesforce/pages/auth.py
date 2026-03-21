@@ -13,7 +13,7 @@ class AuthFlow:
         lightning_pattern = "**/fullsail2.lightning.force.com/**"
 
         async def at_lightning() -> bool:
-            return "fullsail2.lightning.force.com" in page.url
+            return page.url.startswith("https://fullsail2.lightning.force.com/")
 
         async def auth0_button_visible() -> bool:
             auth0_btn = page.get_by_role("button", name="Log in with Auth0")

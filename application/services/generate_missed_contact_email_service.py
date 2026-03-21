@@ -17,7 +17,7 @@ class MissedContactEmailRequest:
 
 class GenerateMissedContactEmailService:
     def __init__(self, oft_path: Path | None = None) -> None:
-        project_dir = Path(__file__).resolve().parents[2] / "automations" / "email_automator"
+        project_dir = Path(__file__).resolve().parents[2] / "automations" / "email_generator"
         self.oft_path = oft_path or (project_dir / "skeletons" / "Missed Contact Template.oft")
 
     def generate_email(self, request: MissedContactEmailRequest) -> None:

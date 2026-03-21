@@ -106,7 +106,7 @@ class ContactDetails:
         contact_student_id = await self.get_student_details_value("CV StuNum")
 
         if contact_student_id != student_id:
-            raise ValueError(f'User supplied Student ID "{student_id}" does not match contact page Student ID "{contact_student_id}. Automator on wrong contact page?"')
+            raise ValueError(f'User supplied Student ID "{student_id}" does not match contact page Student ID "{contact_student_id}". Automator on wrong contact page?"')
         else:
             student.student_id = student_id
 

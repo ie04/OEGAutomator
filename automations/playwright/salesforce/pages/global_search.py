@@ -21,8 +21,12 @@ class GlobalSearch:
     async def search(self, query: str) -> bool:
         page = self.page
 
-        await page.wait_for_load_state(state="load")
+        load_element = page.get_by_role("tab", name="Details")
 
+        try:
+            await load_element.first.wait_for(state="visible", timeout=3000)
+        except Exception:
+            pass
 
         tabs = page.get_by_role("button", name="Close Tab")
 
@@ -41,7 +45,6 @@ class GlobalSearch:
 
         await search_btn.wait_for(state="visible", timeout=3000)
         await search_btn.dblclick()
-        await page.wait_for_timeout(3000)
 
         await sb.wait_for(state="attached", timeout=3000)
         await sb.fill(query)
