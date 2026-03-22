@@ -1,0 +1,13 @@
+# Core automation and UI dependencies
+playwright>=1.52,<2.0
+Pillow>=10.4,<12.0
+
+# Settings / configuration
+pydantic>=2.8,<3.0
+pydantic-settings>=2.3,<3.0
+
+# Windows COM automation for Outlook and Excel workflows
+pywin32>=306
+
+# HTML parsing for task-list email generation
+lxml>=5.2,<6.0
