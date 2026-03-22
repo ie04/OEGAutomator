@@ -38,6 +38,7 @@ from .pages.generate_tb_page import GenerateTBPage
 from .pages.tb_output_page import TBOutputPage
 from .pages.load_student_by_id_page import LoadStudentByIDPage
 from .pages.send_email_page import SendEmailPage
+from .pages.salesforce_helpers_page import SalesforceHelpersPage
 
 from typing import Any
 from PIL import Image, ImageTk
@@ -48,8 +49,12 @@ from application.ports import NSLDSSnapshot
 
 
 class AutomatorUI(tk.Tk):
+    DEFAULT_WINDOW_WIDTH = 600
+    DEFAULT_WINDOW_HEIGHT = 420
+
     def __init__(self, runner):
         super().__init__()
+        self.withdraw()
 
         self.runner = runner
         self.est_finaid_email_service = GenerateEstFinAidEmailService()
@@ -61,9 +66,11 @@ class AutomatorUI(tk.Tk):
         self.tk.call("tk", "scaling", 1.0)
 
         self.title("OEG Automation Suite")
-        self.geometry("600x420")
+        self.geometry(
+            f"{self.DEFAULT_WINDOW_WIDTH}x{self.DEFAULT_WINDOW_HEIGHT}"
+        )
         self.resizable(True, True)
-        self.minsize(600, 420)
+        self.minsize(self.DEFAULT_WINDOW_WIDTH, self.DEFAULT_WINDOW_HEIGHT)
 
         self.BASE_DIR = Path(__file__).resolve().parent
         self.ASSETS = self.BASE_DIR / "icons"
@@ -83,14 +90,26 @@ class AutomatorUI(tk.Tk):
 
         self.frames = {}
         self._tb_output_windows: list[TBOutputPage] = []
+        self._current_page_name: str | None = None
 
-        for Page in (MainPage, LoadStudentByIDPage, SendEmailPage, GenerateTBPage):
+        for Page in (
+            MainPage,
+            LoadStudentByIDPage,
+            SendEmailPage,
+            GenerateTBPage,
+            SalesforceHelpersPage,
+        ):
             page_name = Page.__name__
             frame = Page(parent=self.container, controller=self)
             self.frames[page_name] = frame
             frame.grid(row=0, column=0, sticky="nsew")
 
+        stable_width, stable_height = self._get_stable_window_size()
+        self.geometry(f"{stable_width}x{stable_height}")
+
         self.show_page("MainPage")
+        self.update_idletasks()
+        self.deiconify()
         self.after(100, self._poll_runner)
 
     def _set_app_icon(self):
@@ -108,6 +127,8 @@ class AutomatorUI(tk.Tk):
 
     def _load_icons(self):
         icon_size = (64, 64)
+        salesforce_icon_size = (84,84)
+        salesforce_header_icon_size = (256, 128)
         nslds_icon_size = (150,65)
 
         def load_icon(path, size=icon_size, keep_aspect=False):
@@ -123,17 +144,116 @@ class AutomatorUI(tk.Tk):
         self.icons["tuition_breakdown"] = load_icon(
             self.ASSETS / "tuition-breakdown.png"
         )
+        self.icons["salesforce_helpers"] = load_icon(
+            self.ASSETS / "salesforce-logo.png",
+            size=salesforce_icon_size,
+            keep_aspect=True,
+        )
+        self.icons["salesforce_header"] = load_icon(
+            self.ASSETS / "salesforce-logo.png",
+            size=salesforce_header_icon_size,
+            keep_aspect=True,
+        )
+        self.icons["batch_add_ea"] = load_icon(
+            self.ASSETS / "batch-add-ea.png"
+        )
         self.icons["nslds"] = load_icon(
             self.ASSETS / "nslds-logo.png",
             size=nslds_icon_size,
             keep_aspect=True,
         )
 
+    def get_main_action_button_size(self):
+        grid = 4
+        button_specs = (
+            ("Load Student by Student ID", self.icons["load_id"]),
+            ("Send Email", self.icons["send_email"]),
+            ("Generate Tuition Breakdown", self.icons["tuition_breakdown"]),
+            ("Salesforce Helpers", self.icons["salesforce_helpers"]),
+        )
+
+        temp_frame = tk.Frame(self.container, bg="#C0C0C0")
+        temp_buttons = []
+
+        for row, (text, icon) in enumerate(button_specs):
+            button = tk.Button(
+                temp_frame,
+                text=text,
+                image=icon,
+                compound="left",
+            )
+            button.grid(row=row, column=0)
+            temp_buttons.append(button)
+
+        temp_frame.update_idletasks()
+
+        max_icon_w = max(icon.width() for _, icon in button_specs)
+        btn_width = max(button.winfo_reqwidth() for button in temp_buttons)
+        btn_width += max_icon_w + (grid * 12)
+        btn_height = max(button.winfo_reqheight() for button in temp_buttons)
+
+        temp_frame.destroy()
+        return btn_width, btn_height
+
+    def get_default_window_size(self):
+        return self.DEFAULT_WINDOW_WIDTH, self.DEFAULT_WINDOW_HEIGHT
+
+    def _get_preferred_window_size(self, frame):
+        default_width, default_height = self.get_default_window_size()
+
+        if hasattr(frame, "get_preferred_window_size"):
+            width, height = frame.get_preferred_window_size()
+        else:
+            frame.update_idletasks()
+            width = frame.winfo_reqwidth() + 24
+            height = frame.winfo_reqheight() + 24
+
+        return max(default_width, width), max(default_height, height)
+
+    def _get_stable_window_size(self):
+        default_width, default_height = self.get_default_window_size()
+        max_width = default_width
+        max_height = default_height
+
+        for frame in self.frames.values():
+            if hasattr(frame, "get_max_preferred_window_size"):
+                width, height = frame.get_max_preferred_window_size()
+            else:
+                width, height = self._get_preferred_window_size(frame)
+
+            max_width = max(max_width, width)
+            max_height = max(max_height, height)
+
+        return max_width, max_height
+
+    def _apply_window_layout(self, frame):
+        self.update_idletasks()
+        _ = frame
+
     def show_page(self, page_name):
         frame = self.frames[page_name]
-        frame.tkraise()
+        previous_page = (
+            self.frames[self._current_page_name]
+            if self._current_page_name is not None
+            else None
+        )
+
+        if previous_page is not None and previous_page is not frame:
+            if hasattr(previous_page, "on_hide"):
+                previous_page.on_hide()
+
         if hasattr(frame, "on_show"):
             frame.on_show()
+        self._apply_window_layout(frame)
+        frame.tkraise()
+        self._current_page_name = page_name
+
+    def refresh_current_page_layout(self):
+        if self._current_page_name is None:
+            return
+
+        frame = self.frames[self._current_page_name]
+        self._apply_window_layout(frame)
 
     def load_student_by_id(self, student_id: str, requester) -> str:
         student_id = student_id.strip()
@@ -158,6 +278,14 @@ class AutomatorUI(tk.Tk):
         job_id = self.runner.submit_query_nslds(student)
         self._pending_jobs[job_id] = {
             "type": "query_nslds",
+            "requester": requester,
+        }
+        return job_id
+
+    def batch_add_ea(self, student_ids: list[str], requester) -> str:
+        job_id = self.runner.submit_batch_add_ea(student_ids)
+        self._pending_jobs[job_id] = {
+            "type": "batch_add_ea",
             "requester": requester,
         }
         return job_id
@@ -266,7 +394,10 @@ class AutomatorUI(tk.Tk):
             if result is None:
                 break
 
-            job = self._pending_jobs.pop(result.job_id, None)
+            if result.status == "progress":
+                job = self._pending_jobs.get(result.job_id)
+            else:
+                job = self._pending_jobs.pop(result.job_id, None)
             if job is None:
                 continue
 
@@ -290,6 +421,18 @@ class AutomatorUI(tk.Tk):
                     else:
                         if hasattr(requester, "on_nslds_query_error"):
                             requester.on_nslds_query_error(
+                                result.error or "Unknown error"
+                            )
+                elif job_type == "batch_add_ea":
+                    if result.status == "progress":
+                        if hasattr(requester, "on_batch_add_ea_progress"):
+                            requester.on_batch_add_ea_progress(str(result.payload))
+                    elif result.status == "success":
+                        if hasattr(requester, "on_batch_add_ea_completed"):
+                            requester.on_batch_add_ea_completed(result.payload)
+                    else:
+                        if hasattr(requester, "on_batch_add_ea_error"):
+                            requester.on_batch_add_ea_error(
                                 result.error or "Unknown error"
                             )
             except Exception as e:

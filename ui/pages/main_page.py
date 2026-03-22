@@ -11,19 +11,25 @@ class MainPage(tk.Frame):
     def _build(self):
         GRID = 4
 
-        self.grid_rowconfigure(0, weight=0)
-        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
+
+        body = tk.LabelFrame(
+            self,
+            text="",
+            bg="#C0C0C0",
+            padx=16,
+            pady=12,
+        )
+        body.grid(row=0, column=0, sticky="nsew", padx=12, pady=(12, 12))
 
         title = tk.Label(
             self,
             text="OEG Automation Suite",
-            bg="#C0C0C0"
+            bg="#C0C0C0",
+            font=("W95FA", -32),
         )
-        title.grid(row=0, column=0, pady=(GRID * 4, 0), sticky="n")
-
-        body = tk.Frame(self, bg="#C0C0C0")
-        body.grid(row=1, column=0, sticky="nsew")
+        title.place(in_=body, relx=0.5, y=-10, anchor="center")
 
         body.grid_rowconfigure(0, weight=1)
         body.grid_rowconfigure(1, weight=0)
@@ -33,52 +39,7 @@ class MainPage(tk.Frame):
         btn_wrap = tk.Frame(body, bg="#C0C0C0")
         btn_wrap.grid(row=1, column=0)
 
-        # Temporary stock buttons just to measure baseline size
-        tmp_load = tk.Button(
-            btn_wrap,
-            text="Load Student by Student ID",
-            image=self.controller.icons["load_id"],
-            compound="left"
-        )
-        tmp_email = tk.Button(
-            btn_wrap,
-            text="Send Email",
-            image=self.controller.icons["send_email"],
-            compound="left"
-        )
-        tmp_tb = tk.Button(
-            btn_wrap,
-            text="Generate Tuition Breakdown",
-            image=self.controller.icons["tuition_breakdown"],
-            compound="left"
-        )
-
-        tmp_load.grid(row=0, column=0)
-        tmp_email.grid(row=1, column=0)
-        tmp_tb.grid(row=2, column=0)
-        self.update_idletasks()
-
-        max_icon_w = max(
-            self.controller.icons["load_id"].width(),
-            self.controller.icons["send_email"].width(),
-            self.controller.icons["tuition_breakdown"].width()
-        )
-
-        btn_width = max(
-            tmp_load.winfo_reqwidth(),
-            tmp_email.winfo_reqwidth(),
-            tmp_tb.winfo_reqwidth()
-        ) + max_icon_w + (GRID * 12)
-
-        btn_height = max(
-            tmp_load.winfo_reqheight(),
-            tmp_email.winfo_reqheight(),
-            tmp_tb.winfo_reqheight()
-        )
-
-        tmp_load.destroy()
-        tmp_email.destroy()
-        tmp_tb.destroy()
+        btn_width, btn_height = self.controller.get_main_action_button_size()
 
         load_button = ActionButton(
             btn_wrap,
@@ -107,9 +68,19 @@ class MainPage(tk.Frame):
             height=btn_height,
         )
 
+        salesforce_helpers_button = ActionButton(
+            btn_wrap,
+            text="Salesforce Helpers",
+            icon=self.controller.icons["salesforce_helpers"],
+            command=self.open_salesforce_helpers,
+            width=btn_width,
+            height=btn_height,
+        )
+
         load_button.grid(row=0, column=0, pady=GRID)
         email_button.grid(row=1, column=0, pady=GRID)
         tb_button.grid(row=2, column=0, pady=GRID)
+        salesforce_helpers_button.grid(row=3, column=0, pady=GRID)
 
     def load_student(self):
         self.controller.show_page("LoadStudentByIDPage")
@@ -119,3 +90,6 @@ class MainPage(tk.Frame):
 
     def open_tuition_breakdown(self):
         self.controller.show_page("GenerateTBPage")
+
+    def open_salesforce_helpers(self):
+        self.controller.show_page("SalesforceHelpersPage")

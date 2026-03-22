@@ -1,4 +1,5 @@
 import tkinter as tk
+import tkinter.font as tkfont
 from pathlib import Path
 from tkinter import messagebox
 from datetime import date
@@ -223,9 +224,12 @@ class LoadStudentByIDPage(tk.Frame):
         return btn_width, btn_height
 
     def _fit_window_to_content(self):
-        root = self.winfo_toplevel()
-        root.update_idletasks()
+        self.controller.refresh_current_page_layout()
 
+    def get_preferred_window_size(self):
+        default_width, default_height = self.controller.get_default_window_size()
+
+        self.update_idletasks()
         req_w = self.winfo_reqwidth() + 48
         req_h = self.winfo_reqheight() + 40
 
@@ -242,8 +246,28 @@ class LoadStudentByIDPage(tk.Frame):
             )
             req_h = max(req_h, tb_height + 160)
 
-        root.geometry(f"{req_w}x{req_h}")
-        root.update_idletasks()
+        return max(default_width, req_w), max(default_height, req_h)
+
+    def get_max_preferred_window_size(self):
+        default_width, default_height = self.controller.get_default_window_size()
+
+        self.update_idletasks()
+        req_w = self.winfo_reqwidth() + 48
+        req_h = self.winfo_reqheight() + 40
+
+        tb_width, tb_height = self.embedded_tb_page.get_preferred_size()
+        info_width = self.info.winfo_reqwidth()
+        top_width = self.winfo_children()[0].winfo_reqwidth() if self.winfo_children() else 0
+        bottom_width = self.winfo_children()[2].winfo_reqwidth() if len(self.winfo_children()) > 2 else 0
+        req_w = max(
+            req_w,
+            info_width + tb_width + 96,
+            top_width + 32,
+            bottom_width + 32,
+        )
+        req_h = max(req_h, tb_height + 160)
+
+        return max(default_width, req_w), max(default_height, req_h)
 
     def _set_loading_state(self, is_loading: bool):
         self._is_loading = is_loading
@@ -269,8 +293,7 @@ class LoadStudentByIDPage(tk.Frame):
         self.tb_button.set_state("disabled")
         self.generate_email_btn.grid_remove()
         self.generate_tb_btn.grid_remove()
-        self.IDEntryTextInput.focus_set()
-        self.after_idle(self._fit_window_to_content)
+        self.after_idle(self.IDEntryTextInput.focus_set)
 
     def _go_back(self):
         if self._is_loading:
@@ -489,7 +512,7 @@ class StudentInfoDisplay(tk.LabelFrame):
         }
 
         self.grid_columnconfigure(0, weight=0)
-        self.grid_columnconfigure(1, weight=1)
+        self.grid_columnconfigure(1, weight=1, minsize=self._value_column_minsize())
 
         label_overrides = {
             "student_id": "Student ID:",
@@ -506,6 +529,20 @@ class StudentInfoDisplay(tk.LabelFrame):
             tk.Label(self, textvariable=v, bg="#C0C0C0", anchor="w").grid(
                 row=r, column=1, sticky="ew", padx=8, pady=2
             )
+
+    def _value_column_minsize(self) -> int:
+        font = tkfont.nametofont("TkDefaultFont")
+        samples = (
+            "0000000000",
+            "Alexandria",
+            "Montgomery-Washington",
+            "12/31/2026",
+            "000-00-0000",
+            "GDVAS01-ONLINE",
+            "studentemailaddress@example.com",
+            "Yes",
+        )
+        return max(font.measure(sample) for sample in samples) + 24
 
     def clear(self):
         for v in self._vars.values():

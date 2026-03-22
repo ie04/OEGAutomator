@@ -12,6 +12,7 @@ from automations.playwright.browser import BrowserSession
 from .config.settings import get_settings
 from automations.playwright.salesforce.salesforce_client import SalesforceClient
 from automations.playwright.nslds.nslds_client import NSLDSClient
+from application.services.batch_add_ea_service import BatchAddEAService
 from application.services.student_lookup_service import StudentLookupService
 from application.services.query_nslds_service import QueryNSLDSService
 from application.ports import StudentSnapshot
@@ -20,7 +21,7 @@ from application.ports import StudentSnapshot
 @dataclass(slots=True)
 class AutomationResult:
     job_id: str
-    status: str  # "success" | "error"
+    status: str  # "success" | "error" | "progress"
     payload: Any = None
     error: Optional[str] = None
     traceback_text: Optional[str] = None
@@ -127,6 +128,23 @@ class AutomationRunner:
         )
         return job_id
 
+    def submit_batch_add_ea(self, student_ids: list[str]) -> str:
+        if not student_ids:
+            raise ValueError("student_ids cannot be empty")
+
+        if not self.is_running:
+            raise RuntimeError("AutomationRunner is not running. Call start() first.")
+
+        job_id = str(uuid.uuid4())
+        self._job_queue.put(
+            (
+                job_id,
+                "batch_add_ea",
+                {"student_ids": list(student_ids)},
+            )
+        )
+        return job_id
+
     def get_result_nowait(self) -> Optional[AutomationResult]:
         try:
             return self._result_queue.get_nowait()
@@ -155,6 +173,7 @@ class AutomationRunner:
         nslds_client: Optional[NSLDSClient] = None
         student_lookup_service: Optional[StudentLookupService] = None
         query_nslds_service: Optional[QueryNSLDSService] = None
+        batch_add_ea_service: Optional[BatchAddEAService] = None
 
         try:
             while not self._stop_event.is_set():
@@ -168,7 +187,7 @@ class AutomationRunner:
                     break
 
                 try:
-                    if job_type in {"student_lookup", "query_nslds"}:
+                    if job_type in {"student_lookup", "query_nslds", "batch_add_ea"}:
                         if browser_session is None or browser_session.is_closed:
                             if browser_session is not None:
                                 try:
@@ -194,15 +213,24 @@ class AutomationRunner:
                                 salesforce_client
                             )
                             query_nslds_service = QueryNSLDSService(nslds_client)
+                            batch_add_ea_service = BatchAddEAService(
+                                salesforce_client
+                            )
 
                         if job_type == "student_lookup":
                             result = await self._handle_student_lookup(
                                 service=student_lookup_service,
                                 payload=payload,
                             )
-                        else:
+                        elif job_type == "query_nslds":
                             result = await self._handle_query_nslds(
                                 service=query_nslds_service,
+                                payload=payload,
+                            )
+                        else:
+                            result = await self._handle_batch_add_ea(
+                                job_id=job_id,
+                                service=batch_add_ea_service,
                                 payload=payload,
                             )
                         self._result_queue.put(
@@ -266,3 +294,24 @@ class AutomationRunner:
             raise TypeError("student must be a StudentSnapshot")
 
         return await service.query_nslds(student)
+
+    async def _handle_batch_add_ea(
+        self,
+        job_id: str,
+        service: BatchAddEAService,
+        payload: dict[str, Any],
+    ) -> Any:
+        student_ids = payload["student_ids"]
+        if not isinstance(student_ids, list) or not student_ids:
+            raise ValueError("student_ids must be a non-empty list")
+
+        def emit_progress(message: str) -> None:
+            self._result_queue.put(
+                AutomationResult(
+                    job_id=job_id,
+                    status="progress",
+                    payload=message,
+                )
+            )
+
+        return await service.run(student_ids, log=emit_progress)

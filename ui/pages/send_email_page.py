@@ -273,14 +273,38 @@ class SendEmailPage(tk.Frame):
                 widget.grid_remove()
 
     def _fit_window_to_content(self):
-        root = self.winfo_toplevel()
-        root.update_idletasks()
+        self.controller.refresh_current_page_layout()
 
-        req_w = max(root.winfo_width(), self.winfo_reqwidth() + 24)
-        req_h = max(root.winfo_height(), self.winfo_reqheight() + 24)
+    def get_preferred_window_size(self):
+        default_width, default_height = self.controller.get_default_window_size()
+        self.update_idletasks()
 
-        root.geometry(f"{req_w}x{req_h}")
-        root.update_idletasks()
+        req_w = self.winfo_reqwidth() + 24
+        req_h = self.winfo_reqheight() + 24
+
+        return max(default_width, req_w), max(default_height, req_h)
+
+    def get_max_preferred_window_size(self):
+        default_width, default_height = self.controller.get_default_window_size()
+        original_type = self.email_type_var.get()
+
+        sizes = []
+        for email_type in self.EMAIL_TYPES:
+            self.email_type_var.set(email_type)
+            self._toggle_task_list_fields(email_type == "Task List")
+            self._toggle_financial_aid_fields(
+                email_type == "Estimated Financial Aid Breakdown"
+            )
+            self.update_idletasks()
+            sizes.append((self.winfo_reqwidth() + 24, self.winfo_reqheight() + 24))
+
+        self.email_type_var.set(original_type)
+        self._set_conditional_fields()
+        self.update_idletasks()
+
+        width = max(size[0] for size in sizes)
+        height = max(size[1] for size in sizes)
+        return max(default_width, width), max(default_height, height)
 
     def _validate_first_name(self, value):
         return value == "" or value.isalpha()
@@ -313,7 +337,7 @@ class SendEmailPage(tk.Frame):
             task_var.set(False)
 
         self._set_conditional_fields()
-        self.first_name_entry.focus_set()
+        self.after_idle(self.first_name_entry.focus_set)
 
     def prefill_from_student(self, student):
         def fmt_start_date(value: date | None) -> str:

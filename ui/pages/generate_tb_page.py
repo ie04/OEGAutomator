@@ -430,6 +430,7 @@ class GenerateTBPage(tk.Frame):
         else:
             self.optional_frame.grid_remove()
         self.after_idle(self._on_form_configure)
+        self.after_idle(self.controller.refresh_current_page_layout)
 
     def _generate_tuition_breakdown(self):
         if self._is_generating:
@@ -617,6 +618,31 @@ class GenerateTBPage(tk.Frame):
         form_width = max(self.form.winfo_reqwidth(), 620)
         form_height = max(self.winfo_reqheight(), 520)
         return form_width + 36, form_height + 24
+
+    def get_preferred_window_size(self):
+        default_width, default_height = self.controller.get_default_window_size()
+        req_w, req_h = self.get_preferred_size()
+        return max(default_width, req_w), max(default_height, req_h)
+
+    def get_max_preferred_window_size(self):
+        default_width, default_height = self.controller.get_default_window_size()
+        original_visible = self.optional_args_visible
+
+        self.optional_frame.grid()
+        self.optional_args_visible = True
+        self.update_idletasks()
+        expanded_w, expanded_h = self.get_preferred_size()
+
+        if not original_visible:
+            self.optional_frame.grid_remove()
+            self.optional_args_visible = False
+
+        self.update_idletasks()
+        collapsed_w, collapsed_h = self.get_preferred_size()
+
+        req_w = max(expanded_w, collapsed_w)
+        req_h = max(expanded_h, collapsed_h)
+        return max(default_width, req_w), max(default_height, req_h)
 
     def _go_back(self):
         self.on_hide()

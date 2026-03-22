@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from urllib.parse import urlparse
 from typing import List, Optional
 from pathlib import Path
@@ -14,6 +15,16 @@ from .pages.contact_details import ContactDetails
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 CAEA_DIRECTORY = PROJECT_ROOT / "automations" / "playwright" / "salesforce" / "CAEA"
+VALID_EA_START_DATES = {
+    date(2026, 4, 6),
+    date(2026, 5, 4),
+    date(2026, 6, 1),
+    date(2026, 6, 29),
+    date(2026, 8, 3),
+    date(2026, 8, 31),
+    date(2026, 9, 28),
+    date(2026, 10, 26),
+}
 
 class StudentNotFoundError(Exception):
     pass
@@ -53,7 +64,12 @@ class SalesforceClient(SalesforcePort):
 
         return student_snapshot
 
-    async def batch_add_enrollment_agreements(self, id_list: List[str]) -> bool:
+    async def batch_add_enrollment_agreements(
+        self,
+        id_list: List[str],
+        log: Callable[[str], None] | None = None,
+    ) -> bool:
+        emit = log or print
 
         async def get_earliest_date_row(page: Page) -> Optional[Locator]:
             rows = page.locator('tr[role="row"]')
@@ -82,6 +98,8 @@ class SalesforceClient(SalesforcePort):
                     continue
 
                 current_date = date.fromisoformat(match.group(0))
+                if current_date not in VALID_EA_START_DATES:
+                    continue
 
                 if earliest_date is None or current_date < earliest_date:
                     earliest_date = current_date
@@ -90,7 +108,6 @@ class SalesforceClient(SalesforcePort):
             return earliest_date_row
         
         enrollment_agreement_tool_url = f"https://fullsail2.lightning.force.com/lightning/n/Enrollment_Agreement_Tool"
-        base_url = str(self.cfg.base_salesforce_url)
         page = await self.session.get_page()
 
         if not enrollment_agreement_tool_url in page.url:
@@ -118,12 +135,15 @@ class SalesforceClient(SalesforcePort):
             await filter_id_btn.click()
 
             earliest_date_row = await get_earliest_date_row(page)
+            if earliest_date_row is None:
+                emit(f"No enrollment rows found for student id {id}")
+                continue
 
             already_assigned_date = earliest_date_row.locator("lightning-formatted-date-time")
             await expect(already_assigned_date).to_be_attached()
 
             if await already_assigned_date.inner_text() != "":
-                print(f"EA doc(s) for student id {id} already added")
+                emit(f"EA doc(s) for student id {id} already added")
                 continue
 
             select_student_btn = earliest_date_row.locator(".slds-radio_faux")
@@ -136,7 +156,10 @@ class SalesforceClient(SalesforcePort):
             if await assign_ea_btn.is_enabled():
                 await assign_ea_btn.click()
             else:
-                print(f"Unable to assign EA for student id {id} ('Assign Custom Document is greyed out')")
+                emit(
+                    "Unable to assign EA for student id "
+                    f"{id} ('Assign Custom Document is greyed out')"
+                )
                 continue
 
             doc_type_box = page.get_by_role("combobox", name="Document Type")
@@ -215,21 +238,12 @@ class SalesforceClient(SalesforcePort):
                 await expect(submit_btn).not_to_be_visible(timeout=30000)
 
             if CAEA_needed:    
-                print(f"EA & CAEA successfully added for student id {id}")
+                emit(f"EA & CAEA successfully added for student id {id}")
             else:
-                print(f"EA successfully added for student id {id}")
+                emit(f"EA successfully added for student id {id}")
 
-
-
-
-            
-
-
-           
-            
-            
-
-
+        emit("Batch Add Enrollment Agreements complete")
+        return True
 
     @staticmethod
     def _needs_auth(current_url: str, base_url: str) -> bool:
